@@ -1,39 +1,19 @@
-# Connect to Exchange Online
-Connect-ExchangeOnline
+# Output path
+$outputPath = "C:\Export\AllMailboxProxyAddresses.csv"
 
-# Set domain to filter
-$filterDomain = "@yourdomain.com"
-
-# Output CSV path
-$outputPath = "C:\Export\FilteredProxyAddresses.csv"
-
-# Collect mailboxes
+# Get all mailboxes
 $mailboxes = Get-Mailbox -ResultSize Unlimited
-$sharedMailboxes = Get-Mailbox -ResultSize Unlimited -RecipientTypeDetails SharedMailbox
-$mailUsers = Get-MailUser -ResultSize Unlimited
 
-# Combine all
-$allRecipients = @()
-$allRecipients += $mailboxes
-$allRecipients += $sharedMailboxes
-$allRecipients += $mailUsers
-
-# Filter and collect results
-$filteredResults = foreach ($recipient in $allRecipients) {
-    $matchingProxies = $recipient.EmailAddresses | Where-Object { $_ -like "*$filterDomain*" }
-
-    if ($matchingProxies) {
-        [PSCustomObject]@{
-            DisplayName       = $recipient.DisplayName
-            PrimarySMTP       = ($recipient.PrimarySmtpAddress).ToString()
-            RecipientType     = $recipient.RecipientTypeDetails
-            UserPrincipalName = $recipient.UserPrincipalName
-            ProxyAddresses    = ($matchingProxies -join "; ")
-        }
+# Build export data
+$exportData = foreach ($mb in $mailboxes) {
+    [PSCustomObject]@{
+        DisplayName     = $mb.DisplayName
+        PrimarySMTP     = $mb.PrimarySmtpAddress.ToString()
+        ProxyAddresses  = ($mb.EmailAddresses -join "; ")
     }
 }
 
 # Export to CSV
-$filteredResults | Export-Csv -Path $outputPath -NoTypeInformation -Encoding UTF8
+$exportData | Export-Csv -Path $outputPath -NoTypeInformation -Encoding UTF8
 
 Write-Host "`n✅ Export complete: $outputPath"
