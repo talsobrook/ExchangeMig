@@ -1,0 +1,16 @@
+# Get all recipients with proxy addresses containing the domain
+$recipients = Get-Recipient -ResultSize Unlimited | Where-Object {
+    $_.EmailAddresses -match "@yourdomain.com"
+}
+
+foreach ($recipient in $recipients) {
+    $cleanedEmails = @()
+    foreach ($addr in $recipient.EmailAddresses) {
+        if ($addr -notmatch "@yourdomain.com") {
+            $cleanedEmails += $addr
+        }
+    }
+
+    Write-Host "Removing domain from proxyAddresses for $($recipient.DisplayName)"
+    Set-Mailbox $recipient.Identity -EmailAddresses $cleanedEmails
+}
