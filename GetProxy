@@ -1,0 +1,31 @@
+# Connect to Exchange Online
+Connect-ExchangeOnline
+
+# Set the domain to filter for
+$filterDomain = "@yourdomain.com"
+
+# Output path
+$outputPath = "C:\Export\ProxyAddressesFiltered.csv"
+
+# Get all recipients
+$recipients = Get-Recipient -ResultSize Unlimited
+
+# Prepare filtered export
+$filteredData = foreach ($recipient in $recipients) {
+    $matchingProxies = $recipient.EmailAddresses | Where-Object { $_ -like "*$filterDomain*" }
+
+    if ($matchingProxies) {
+        [PSCustomObject]@{
+            DisplayName       = $recipient.DisplayName
+            PrimarySMTP       = ($recipient.PrimarySmtpAddress).ToString()
+            RecipientType     = $recipient.RecipientType
+            UserPrincipalName = $recipient.UserPrincipalName
+            ProxyAddresses    = ($matchingProxies -join "; ")
+        }
+    }
+}
+
+# Export results to CSV
+$filteredData | Export-Csv -Path $outputPath -NoTypeInformation -Encoding UTF8
+
+Write-Host "Filtered proxy address export complete: $outputPath"
