@@ -1,0 +1,6 @@
+# Connect to Microsoft Graph (requires Graph PowerShell SDK)
+Connect-MgGraph -Scopes "User.ReadWrite.All", "Directory.ReadWrite.All"
+
+# Connect to Exchange Online
+Connect-ExchangeOnline
+
