@@ -1,16 +1,45 @@
-# Get all recipients with proxy addresses containing the domain
-$recipients = Get-Recipient -ResultSize Unlimited | Where-Object {
-    $_.EmailAddresses -match "@yourdomain.com"
+# Connect to Exchange Online
+#Connect-ExchangeOnline
+
+# Paths
+$csvPath = "C:\Temp\proxylist.csv"
+$logPath = "C:\Temp\AddProxyResults.log"
+
+# Ensure log directory exists
+if (!(Test-Path -Path (Split-Path $logPath))) {
+    New-Item -Path (Split-Path $logPath) -ItemType Directory | Out-Null
 }
 
-foreach ($recipient in $recipients) {
-    $cleanedEmails = @()
-    foreach ($addr in $recipient.EmailAddresses) {
-        if ($addr -notmatch "@yourdomain.com") {
-            $cleanedEmails += $addr
-        }
-    }
+# Load CSV
+$csv = Import-Csv -Path $csvPath
 
-    Write-Host "Removing domain from proxyAddresses for $($recipient.DisplayName)"
-    Set-Mailbox $recipient.Identity -EmailAddresses $cleanedEmails
+# Start processing
+foreach ($entry in $csv) {
+    $upn = $entry.UserPrincipalName
+    $newProxy = "smtp:" + $entry.NewProxyAddress.ToLower()
+
+    try {
+        $mailbox = Get-Mailbox -Identity $upn
+        $existing = $mailbox.EmailAddresses
+
+        if ($existing -contains $newProxy) {
+            $msg = "SKIPPED: Proxy $newProxy already exists for $upn"
+            Write-Host $msg -ForegroundColor Yellow
+            Add-Content -Path $logPath -Value $msg
+            continue
+        }
+
+        # Add proxy address
+        $updated = $existing + $newProxy
+        Set-Mailbox -Identity $upn -EmailAddresses $updated
+
+        $msg = "SUCCESS: Added $newProxy to $upn"
+        Write-Host $msg -ForegroundColor Green
+        Add-Content -Path $logPath -Value $msg
+    }
+    catch {
+        $msg = "ERROR: Failed for $upn - $_"
+        Write-Host $msg -ForegroundColor Red
+        Add-Content -Path $logPath -Value $msg
+    }
 }
