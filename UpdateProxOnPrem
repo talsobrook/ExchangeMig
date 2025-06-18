@@ -1,8 +1,7 @@
-# On-Prem Exchange Management Shell
+# On-Prem Exchange Management Shell only
 
-# File paths
 $csvPath = "C:\Input\proxylist.csv"
-$logPath = "C:\Logs\AddProxyResults_OnPrem.log"
+$logPath = "C:\Logs\AddProxyResults_RemoteMailbox_SMTP.log"
 
 # Ensure log directory exists
 if (!(Test-Path -Path (Split-Path $logPath))) {
@@ -13,30 +12,29 @@ if (!(Test-Path -Path (Split-Path $logPath))) {
 $csv = Import-Csv -Path $csvPath
 
 foreach ($entry in $csv) {
-    $upn = $entry.UserPrincipalName
+    $primarySMTP = $entry.PrimarySMTP.ToLower()
     $newProxy = "smtp:" + $entry.NewProxyAddress.ToLower()
 
     try {
-        # Get the mailbox
-        $mbx = Get-Mailbox -Identity $upn
-        $existing = $mbx.EmailAddresses
+        # Locate RemoteMailbox using primary SMTP
+        $rm = Get-RemoteMailbox -Identity $primarySMTP -ErrorAction Stop
 
-        if ($existing -contains $newProxy) {
-            $msg = "SKIPPED: $newProxy already exists for $upn"
+        if ($rm.EmailAddresses -contains $newProxy) {
+            $msg = "SKIPPED: $newProxy already exists for $primarySMTP"
             Write-Host $msg -ForegroundColor Yellow
             Add-Content -Path $logPath -Value $msg
             continue
         }
 
-        # Add the proxy address using the Add method (on-prem syntax)
-        Set-Mailbox -Identity $upn -EmailAddresses @{Add=$newProxy}
+        # Add proxy address using safe append
+        Set-RemoteMailbox -Identity $primarySMTP -EmailAddresses @{Add=$newProxy}
 
-        $msg = "SUCCESS: Added $newProxy to $upn"
+        $msg = "SUCCESS: Added $newProxy to $primarySMTP"
         Write-Host $msg -ForegroundColor Green
         Add-Content -Path $logPath -Value $msg
     }
     catch {
-        $msg = "ERROR: Failed for $upn - $_"
+        $msg = "ERROR: Failed for $primarySMTP - $_"
         Write-Host $msg -ForegroundColor Red
         Add-Content -Path $logPath -Value $msg
     }
