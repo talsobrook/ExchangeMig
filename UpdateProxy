@@ -1,7 +1,7 @@
 # Connect to Exchange Online
 #Connect-ExchangeOnline
 
-# Paths
+# File paths
 $csvPath = "C:\Temp\proxylist.csv"
 $logPath = "C:\Temp\AddProxyResults.log"
 
@@ -10,10 +10,9 @@ if (!(Test-Path -Path (Split-Path $logPath))) {
     New-Item -Path (Split-Path $logPath) -ItemType Directory | Out-Null
 }
 
-# Load CSV
+# Import CSV
 $csv = Import-Csv -Path $csvPath
 
-# Start processing
 foreach ($entry in $csv) {
     $upn = $entry.UserPrincipalName
     $newProxy = "smtp:" + $entry.NewProxyAddress.ToLower()
@@ -23,15 +22,14 @@ foreach ($entry in $csv) {
         $existing = $mailbox.EmailAddresses
 
         if ($existing -contains $newProxy) {
-            $msg = "SKIPPED: Proxy $newProxy already exists for $upn"
+            $msg = "SKIPPED: $newProxy already exists for $upn"
             Write-Host $msg -ForegroundColor Yellow
             Add-Content -Path $logPath -Value $msg
             continue
         }
 
-        # Add proxy address
-        $updated = $existing + $newProxy
-        Set-Mailbox -Identity $upn -EmailAddresses $updated
+        # Add the new proxy address using the Add syntax
+        Set-Mailbox -Identity $upn -EmailAddresses @{add=$newProxy}
 
         $msg = "SUCCESS: Added $newProxy to $upn"
         Write-Host $msg -ForegroundColor Green
