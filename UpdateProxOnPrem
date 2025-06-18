@@ -1,0 +1,43 @@
+# On-Prem Exchange Management Shell
+
+# File paths
+$csvPath = "C:\Input\proxylist.csv"
+$logPath = "C:\Logs\AddProxyResults_OnPrem.log"
+
+# Ensure log directory exists
+if (!(Test-Path -Path (Split-Path $logPath))) {
+    New-Item -Path (Split-Path $logPath) -ItemType Directory | Out-Null
+}
+
+# Import CSV
+$csv = Import-Csv -Path $csvPath
+
+foreach ($entry in $csv) {
+    $upn = $entry.UserPrincipalName
+    $newProxy = "smtp:" + $entry.NewProxyAddress.ToLower()
+
+    try {
+        # Get the mailbox
+        $mbx = Get-Mailbox -Identity $upn
+        $existing = $mbx.EmailAddresses
+
+        if ($existing -contains $newProxy) {
+            $msg = "SKIPPED: $newProxy already exists for $upn"
+            Write-Host $msg -ForegroundColor Yellow
+            Add-Content -Path $logPath -Value $msg
+            continue
+        }
+
+        # Add the proxy address using the Add method (on-prem syntax)
+        Set-Mailbox -Identity $upn -EmailAddresses @{Add=$newProxy}
+
+        $msg = "SUCCESS: Added $newProxy to $upn"
+        Write-Host $msg -ForegroundColor Green
+        Add-Content -Path $logPath -Value $msg
+    }
+    catch {
+        $msg = "ERROR: Failed for $upn - $_"
+        Write-Host $msg -ForegroundColor Red
+        Add-Content -Path $logPath -Value $msg
+    }
+}
