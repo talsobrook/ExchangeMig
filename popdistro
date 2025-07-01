@@ -1,0 +1,15 @@
+# Only for on-premises Exchange Management Shell
+
+$distGroup = "AllStaff"
+
+$members = Import-Csv -Path "C:\Path\To\members.csv"
+
+foreach ($member in $members) {
+    try {
+        Add-DistributionGroupMember -Identity $distGroup -Member $member.EmailAddress -ErrorAction Stop
+        Write-Host "Added $($member.EmailAddress)"
+    }
+    catch {
+        Write-Warning "Failed to add $($member.EmailAddress): $_"
+    }
+}
