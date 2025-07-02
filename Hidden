@@ -1,0 +1,18 @@
+# Set your target OU (adjust as needed)
+$OU = "OU=Executives,DC=yourdomain,DC=com"
+
+# Import Active Directory module
+Import-Module ActiveDirectory
+
+# Get users from the specified OU and check msExchHideFromAddressLists
+$results = Get-ADUser -SearchBase $OU -Filter * -Properties displayName, mail, msExchHideFromAddressLists | Select-Object `
+    Name,
+    SamAccountName,
+    mail,
+    @{Name="HiddenFromGAL"; Expression = { $_.msExchHideFromAddressLists -eq $true }}
+
+# Output to screen
+$results | Format-Table -AutoSize
+
+# Optional: Export to CSV
+$results | Export-Csv -Path "C:\Temp\GAL_Visibility_Report.csv" -NoTypeInformation
