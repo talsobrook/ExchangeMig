@@ -1,0 +1,44 @@
+# Define the path to your CSV file
+$csvPath = "C:\Path\To\your\iplist.csv"
+
+# Import the CSV
+$ips = Import-Csv -Path $csvPath
+
+# Prepare output array
+$results = @()
+
+foreach ($entry in $ips) {
+    $ip = $entry.IPAddress
+    $pingReply = Test-Connection -ComputerName $ip -Count 1 -Quiet -ErrorAction SilentlyContinue
+
+    $status = @{
+        IPAddress     = $ip
+        Pingable      = $false
+        ReverseDNS    = ""
+    }
+
+    if ($pingReply) {
+        $status.Pingable = $true
+        try {
+            $hostEntry = [System.Net.Dns]::GetHostEntry($ip)
+            $status.ReverseDNS = $hostEntry.HostName
+        } catch {
+            $status.ReverseDNS = "No PTR record"
+        }
+    }
+
+    $results += New-Object PSObject -Property $status
+}
+
+# Group and display output
+Write-Host "`n--- Pingable with Reverse DNS ---"
+$results | Where-Object { $_.Pingable -and $_.ReverseDNS -ne "No PTR record" } | Format-Table
+
+Write-Host "`n--- Pingable without Reverse DNS ---"
+$results | Where-Object { $_.Pingable -and $_.ReverseDNS -eq "No PTR record" } | Format-Table
+
+Write-Host "`n--- Unpingable ---"
+$results | Where-Object { -not $_.Pingable } | Format-Table
+
+# Optional: Export results to CSV
+#$results | Export-Csv -Path "C:\Path\To\output.csv" -NoTypeInformation
