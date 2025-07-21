@@ -1,0 +1,25 @@
+$DCs = Get-ADDomainController -Filter *
+foreach ($dc in $DCs) {
+    Invoke-Command -ComputerName $dc.HostName -ScriptBlock {
+        $certs = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object {
+            $_.EnhancedKeyUsageList.FriendlyName -contains "Smart Card Logon" -and
+            $_.EnhancedKeyUsageList.FriendlyName -contains "Client Authentication" -and
+            $_.Subject -like "*$env:COMPUTERNAME*"
+        }
+        if ($certs) {
+            [PSCustomObject]@{
+                DC          = $env:COMPUTERNAME
+                Subject     = $certs.Subject
+                Expiry      = $certs.NotAfter
+                Thumbprint  = $certs.Thumbprint
+            }
+        } else {
+            [PSCustomObject]@{
+                DC          = $env:COMPUTERNAME
+                Subject     = "No valid KDC cert found"
+                Expiry      = "N/A"
+                Thumbprint  = "N/A"
+            }
+        }
+    }
+}
