@@ -1,0 +1,73 @@
+
+
+# Requires: ActiveDirectory module and admin rights on all DCs
+Import-Module ActiveDirectory
+
+$DCs = Get-ADDomainController -Filter *
+
+$scriptBlock = {
+    $certs = Get-ChildItem -Path Cert:\LocalMachine\My
+    $results = @()
+
+    foreach ($cert in $certs) {
+        $hasSubject = -not [string]::IsNullOrWhiteSpace($cert.Subject)
+        $hasSan = $false
+        $hasRequiredEku = $false
+        $ekuList = @()
+
+        # Check EKUs
+        foreach ($eku in $cert.Extensions | Where-Object { $_.Oid.FriendlyName -eq "Enhanced Key Usage" }) {
+            foreach ($oid in $eku.EnhancedKeyUsages) {
+                $ekuList += "$($oid.FriendlyName)"
+                if ($oid.Value -in @("1.3.6.1.5.5.7.3.2", "1.3.6.1.4.1.311.20.2.2")) {
+                    $hasRequiredEku = $true
+                }
+            }
+        }
+
+        # Check SAN
+        foreach ($ext in $cert.Extensions) {
+            if ($ext.Oid.FriendlyName -eq "Subject Alternative Name") {
+                $sanData = $ext.Format($true)
+                if ($sanData -match "DNS Name=") {
+                    $hasSan = $true
+                }
+            }
+        }
+
+        $results += [PSCustomObject]@{
+            'ComputerName'    = $env:COMPUTERNAME
+            'Thumbprint'      = $cert.Thumbprint
+            'Subject'         = if ($hasSubject) { $cert.Subject } else { "❌ Missing" }
+            'Has SAN (DNS)'   = if ($hasSan) { "✅" } else { "❌ Missing" }
+            'EKUs'            = ($ekuList -join ", ")
+            'EKU OK'          = if ($hasRequiredEku) { "✅" } else { "❌ Missing required EKU" }
+            'Expiration'      = $cert.NotAfter
+        }
+    }
+
+    return $results
+}
+
+$fullResults = foreach ($dc in $DCs) {
+    try {
+        Invoke-Command -ComputerName $dc.HostName -ScriptBlock $scriptBlock -ErrorAction Stop
+    }
+    catch {
+        [PSCustomObject]@{
+            ComputerName    = $dc.HostName
+            Thumbprint      = "❌"
+            Subject         = "Connection Failed"
+            'Has SAN (DNS)' = "❌"
+            'EKUs'          = ""
+            'EKU OK'        = "❌"
+            Expiration      = ""
+        }
+    }
+}
+
+# View results
+$fullResults | Format-Table -AutoSize
+
+# Optional: Export to CSV
+# $fullResults | Export-Csv "KDC_Cert_Audit_AllDCs.csv" -NoTypeInformation
