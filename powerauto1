@@ -89,3 +89,9 @@ Example:
   "response": "**Summary:**\nMeeting rescheduled and new assignments given.\n\n**Tasks:**\n• Update the sales report\n• Schedule Q3 review with marketing\n\n**Deadlines:**\n• Submit report by Friday, July 26"
 }
 
+
+
+
+reg query HKLM\SOFTWARE\Microsoft\PolicyManager\current\device\PassportForWork
+
+Get-WmiObject -Namespace "root\cimv2\mdm\dmmap" -Class "MDM_Policy_Config01_PassportForWork01"
