@@ -1,0 +1,33 @@
+# Requires RSAT AD module
+Import-Module ActiveDirectory
+
+# Replace with your target username
+$username = "jdoe"
+
+# Get the user's KeyCredentialLink entries
+$user = Get-ADUser -Identity $username -Properties msDS-KeyCredentialLink
+
+if (-not $user.'msDS-KeyCredentialLink') {
+    Write-Host "No msDS-KeyCredentialLink entries found for $username"
+    return
+}
+
+Write-Host "Found $($user.'msDS-KeyCredentialLink'.Count) WHfB credential(s) for $username" -ForegroundColor Cyan
+
+# Decode each entry
+foreach ($raw in $user.'msDS-KeyCredentialLink') {
+    try {
+        $data = [System.Text.Encoding]::UTF8.GetString($raw.BinaryValue)
+        $json = ConvertFrom-Json $data -ErrorAction Stop
+
+        Write-Output ""
+        Write-Output "🔑 Device ID: $($json.deviceId)"
+        Write-Output "📅 Creation Time: $($json.creationTime)"
+        Write-Output "🔏 Key ID: $($json.keyId)"
+        Write-Output "🔐 Key Type: $($json.keyType)"
+        Write-Output "🔘 Usage: $($json.usage)"
+        Write-Output "-----------------------------"
+    } catch {
+        Write-Warning "Failed to parse one key entry. Possibly a legacy format or corrupted record."
+    }
+}
