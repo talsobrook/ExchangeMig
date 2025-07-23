@@ -1,33 +1,50 @@
-# Requires RSAT AD module
 Import-Module ActiveDirectory
 
-# Replace with your target username
+# Set username
 $username = "jdoe"
 
-# Get the user's KeyCredentialLink entries
-$user = Get-ADUser -Identity $username -Properties msDS-KeyCredentialLink
+# Get user with WHfB keys
+$user = Get-ADUser -Identity $username -Properties 'msDS-KeyCredentialLink'
 
+# Check for key presence
 if (-not $user.'msDS-KeyCredentialLink') {
     Write-Host "No msDS-KeyCredentialLink entries found for $username"
     return
 }
 
-Write-Host "Found $($user.'msDS-KeyCredentialLink'.Count) WHfB credential(s) for $username" -ForegroundColor Cyan
+# Load required type (KeyCredential structure from .NET)
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
 
-# Decode each entry
+[StructLayout(LayoutKind.Sequential)]
+public struct FILETIME {
+    public uint dwLowDateTime;
+    public uint dwHighDateTime;
+
+    public DateTime ToDateTime() {
+        long fileTime = ((long)dwHighDateTime << 32) + dwLowDateTime;
+        return DateTime.FromFileTimeUtc(fileTime);
+    }
+}
+"@ -ErrorAction SilentlyContinue
+
+# Enumerate entries
+$counter = 0
 foreach ($raw in $user.'msDS-KeyCredentialLink') {
+    $counter++
     try {
-        $data = [System.Text.Encoding]::UTF8.GetString($raw.BinaryValue)
-        $json = ConvertFrom-Json $data -ErrorAction Stop
+        $data = $raw.BinaryValue
+        $guid = [guid]::new($data[0..15])
+        $creationTime = [BitConverter]::ToInt64($data, 16)
+        $dt = [datetime]::FromFileTimeUtc($creationTime)
 
-        Write-Output ""
-        Write-Output "🔑 Device ID: $($json.deviceId)"
-        Write-Output "📅 Creation Time: $($json.creationTime)"
-        Write-Output "🔏 Key ID: $($json.keyId)"
-        Write-Output "🔐 Key Type: $($json.keyType)"
-        Write-Output "🔘 Usage: $($json.usage)"
-        Write-Output "-----------------------------"
+        Write-Host "`nKey #$counter"
+        Write-Host "Key ID (GUID): $guid"
+        Write-Host "Creation Time : $dt"
+        Write-Host "Raw Length    : $($data.Length) bytes"
+        Write-Host "---------------------------"
     } catch {
-        Write-Warning "Failed to parse one key entry. Possibly a legacy format or corrupted record."
+        Write-Warning "Failed to parse entry #$counter. Error: $_"
     }
 }
